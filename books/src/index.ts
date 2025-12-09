@@ -14,13 +14,17 @@ const idSchema = z.object({
 const bookSchema = z.object({
     title: z.string(),
     author: z.string(),
-    year: z.number(),
+    year: z.coerce.number().int(),
 });
 
 app.get("/books", async (c) => {
-    const books = await db.select().from(booksTable);
+    try {
+        const books = await db.select().from(booksTable);
 
-    return c.json(books);
+        return c.json(books);
+    } catch (error) {
+        return c.json({ error: "Internal server error" }, 500);
+    }
 });
 
 app.get(
@@ -28,22 +32,26 @@ app.get(
     validator("param", (value, c) => {
         const parsed = idSchema.safeParse(value);
         if (!parsed.success) {
-            return c.text("Invalid id", 401);
+            return c.json({ error: "Invalid id" }, 400);
         }
         return parsed.data;
     }),
     async (c) => {
         const data = c.req.valid("param");
 
-        const [book] = await db
-            .select()
-            .from(booksTable)
-            .where(eq(booksTable.id, data.id))
-            .limit(1);
+        try {
+            const [book] = await db
+                .select()
+                .from(booksTable)
+                .where(eq(booksTable.id, data.id))
+                .limit(1);
 
-        if (!book) return c.json({ error: "Book not found" });
+            if (!book) return c.json({ error: "Book not found" }, 404);
 
-        return c.json(book);
+            return c.json(book);
+        } catch (error) {
+            return c.json({ error: "Internal server error" }, 500);
+        }
     },
 );
 
@@ -52,16 +60,20 @@ app.post(
     validator("json", (value, c) => {
         const parsed = bookSchema.safeParse(value);
         if (!parsed.success) {
-            return c.text("Invalid book data", 401);
+            return c.json({ error: "Invalid book data" }, 400);
         }
         return parsed.data;
     }),
     async (c) => {
         const data = c.req.valid("json");
 
-        const [book] = await db.insert(booksTable).values(data).returning();
+        try {
+            const [book] = await db.insert(booksTable).values(data).returning();
 
-        return c.json({ id: book.id });
+            return c.json({ id: book.id });
+        } catch (error) {
+            return c.json({ error: "Internal server error" }, 500);
+        }
     },
 );
 
@@ -70,17 +82,32 @@ app.delete(
     validator("param", (value, c) => {
         const parsed = idSchema.safeParse(value);
         if (!parsed.success) {
-            return c.text("Invalid id", 401);
+            return c.json({ error: "Invalid id" }, 400);
         }
         return parsed.data;
     }),
     async (c) => {
         const data = c.req.valid("param");
 
-        await db.delete(booksTable).where(eq(booksTable.id, data.id)).limit(1);
+        try {
+            const [deleted] = await db
+                .delete(booksTable)
+                .where(eq(booksTable.id, data.id))
+                .limit(1)
+                .returning();
 
-        return c.json({ success: true });
+            if (!deleted) {
+                return c.json({ error: "Not found" }, 404);
+            }
+
+            return c.json({ success: true });
+        } catch (error) {
+            return c.json({ error: "Internal server error" }, 500);
+        }
     },
 );
 
-export default app;
+export default {
+    port: 3000,
+    fetch: app.fetch,
+};
