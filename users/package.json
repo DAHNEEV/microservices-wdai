@@ -1,14 +1,15 @@
 {
-  "name": "books",
+  "name": "users",
   "scripts": {
     "dev": "bun run --hot src/index.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
+    "@node-rs/argon2": "^2.0.2",
     "@types/jsonwebtoken": "^9.0.10",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.0",
-    "hono": "^4.10.7",
+    "hono": "^4.10.8",
     "jsonwebtoken": "^9.0.3",
     "zod": "^4.1.13"
   },

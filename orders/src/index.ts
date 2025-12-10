@@ -1,9 +1,10 @@
-import { Hono } from "hono";
+import { Context, Hono, Next } from "hono";
 import { z } from "zod";
 import { validator } from "hono/validator";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { ordersTable } from "./schema";
+import * as jwt from "jsonwebtoken";
 
 const app = new Hono().basePath("/api");
 
@@ -30,6 +31,37 @@ async function bookExists(id: number) {
         return false;
     }
 }
+
+type Variables = {
+    user: any;
+};
+
+const verifyJwt = async (c: Context<{ Variables: Variables }>, next: Next) => {
+    const authHeader = c.req.header("Authorization");
+
+    if (!authHeader) {
+        return c.json({ error: "Token not provided" }, 401);
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+        return c.json(
+            { error: "Token missing from Authorization header" },
+            401,
+        );
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_PUBLIC_KEY!);
+
+        c.set("user", decoded);
+
+        await next();
+    } catch (err) {
+        return c.json({ error: "Invalid token" }, 401);
+    }
+};
 
 app.get(
     "/orders/:id",
@@ -58,6 +90,7 @@ app.get(
 
 app.post(
     "/orders",
+    verifyJwt,
     validator("json", (value, c) => {
         const parsed = orderSchema.safeParse(value);
         if (!parsed.success) {
@@ -69,7 +102,6 @@ app.post(
         const data = c.req.valid("json");
 
         if (!(await bookExists(data.bookId))) {
-            console.log(await bookExists(data.bookId));
             return c.json({ error: "Invalid book id" }, 404);
         }
 
@@ -88,6 +120,7 @@ app.post(
 
 app.delete(
     "/orders/:id",
+    verifyJwt,
     validator("param", (value, c) => {
         const parsed = idSchema.safeParse(value);
         if (!parsed.success) {
@@ -118,6 +151,7 @@ app.delete(
 
 app.patch(
     "/orders/:id",
+    verifyJwt,
     validator("param", (value, c) => {
         const parsed = idSchema.safeParse(value);
         if (!parsed.success) {
